@@ -48,20 +48,18 @@ class BankTransaction(StatusUpdater):
 
 	def add_payment_entries(self, vouchers):
 		"Add the vouchers with zero allocation. Save() will perform the allocations and clearance"
-		if 0.0 >= self.unallocated_amount:
+		if self.unallocated_amount <= 0.0:
 			frappe.throw(frappe._("Bank Transaction {0} is already fully reconciled").format(self.name))
 
 		added = False
 		for voucher in vouchers:
-			# Can't add same voucher twice
-			found = False
-			for pe in self.payment_entries:
-				if (
+			found = any(
+				(
 					pe.payment_document == voucher["payment_doctype"]
 					and pe.payment_entry == voucher["payment_name"]
-				):
-					found = True
-
+				)
+				for pe in self.payment_entries
+			)
 			if not found:
 				pe = {
 					"payment_document": voucher["payment_doctype"],
@@ -97,7 +95,7 @@ class BankTransaction(StatusUpdater):
 					self, payment_entry
 				)
 
-				if 0.0 == unallocated_amount:
+				if unallocated_amount == 0.0:
 					if should_clear:
 						latest_transaction.clear_linked_payment_entry(payment_entry)
 					self.db_delete_payment_entry(payment_entry)
@@ -105,17 +103,17 @@ class BankTransaction(StatusUpdater):
 				elif remaining_amount <= 0.0:
 					self.db_delete_payment_entry(payment_entry)
 
-				elif 0.0 < unallocated_amount and unallocated_amount <= remaining_amount:
+				elif 0.0 < unallocated_amount <= remaining_amount:
 					payment_entry.db_set("allocated_amount", unallocated_amount)
 					remaining_amount -= unallocated_amount
 					if should_clear:
 						latest_transaction.clear_linked_payment_entry(payment_entry)
 
-				elif 0.0 < unallocated_amount and unallocated_amount > remaining_amount:
+				elif unallocated_amount > 0.0:
 					payment_entry.db_set("allocated_amount", remaining_amount)
 					remaining_amount = 0.0
 
-				elif 0.0 > unallocated_amount:
+				elif unallocated_amount < 0.0:
 					self.db_delete_payment_entry(payment_entry)
 					frappe.throw(frappe._("Voucher {0} is over-allocated by {1}").format(unallocated_amount))
 
@@ -155,15 +153,13 @@ class BankTransaction(StatusUpdater):
 		if self.party_type and self.party:
 			return
 
-		result = AutoMatchParty(
+		if result := AutoMatchParty(
 			bank_party_account_number=self.bank_party_account_number,
 			bank_party_iban=self.bank_party_iban,
 			bank_party_name=self.bank_party_name,
 			description=self.description,
 			deposit=self.deposit,
-		).match()
-
-		if result:
+		).match():
 			party_type, party = result
 			frappe.db.set_value(
 				"Bank Transaction", self.name, field={"party_type": party_type, "party": party}
@@ -221,8 +217,7 @@ def get_clearance_details(transaction, payment_entry):
 
 
 def get_related_bank_gl_entries(doctype, docname):
-	# nosemgrep: frappe-semgrep-rules.rules.frappe-using-db-sql
-	result = frappe.db.sql(
+	return frappe.db.sql(
 		"""
 		SELECT
 			ABS(gle.credit_in_account_currency - gle.debit_in_account_currency) AS amount,
@@ -240,7 +235,6 @@ def get_related_bank_gl_entries(doctype, docname):
 		dict(doctype=doctype, docname=docname),
 		as_dict=True,
 	)
-	return result
 
 
 def get_total_allocated_amount(doctype, docname):

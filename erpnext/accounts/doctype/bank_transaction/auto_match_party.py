@@ -47,8 +47,7 @@ class AutoMatchbyAccountIBAN:
 		if not (self.bank_party_account_number or self.bank_party_iban):
 			return None
 
-		result = self.match_account_in_party()
-		return result
+		return self.match_account_in_party()
 
 	def match_account_in_party(self) -> Union[Tuple, None]:
 		"""Check if there is a IBAN/Account No. match in Customer/Supplier/Employee"""
@@ -102,8 +101,7 @@ class AutoMatchbyPartyNameDescription:
 		if not (self.bank_party_name or self.description):
 			return None
 
-		result = self.match_party_name_desc_in_party()
-		return result
+		return self.match_party_name_desc_in_party()
 
 	def match_party_name_desc_in_party(self) -> Union[Tuple, None]:
 		"""Fuzzy search party name and/or description against parties in the system"""
@@ -112,7 +110,7 @@ class AutoMatchbyPartyNameDescription:
 
 		for party in parties:
 			filters = {"status": "Active"} if party == "Employee" else {"disabled": 0}
-			names = frappe.get_all(party, filters=filters, pluck=party.lower() + "_name")
+			names = frappe.get_all(party, filters=filters, pluck=f"{party.lower()}_name")
 
 			for field in ["bank_party_name", "description"]:
 				if not self.get(field):
@@ -134,13 +132,7 @@ class AutoMatchbyPartyNameDescription:
 		result = process.extract(query=self.get(field), choices=names, scorer=fuzz.token_set_ratio)
 		party_name, skip = self.process_fuzzy_result(result)
 
-		if not party_name:
-			return None, skip
-
-		return (
-			party,
-			party_name,
-		), skip
+		return (None, skip) if not party_name else ((party, party_name), skip)
 
 	def process_fuzzy_result(self, result: Union[list, None]):
 		"""
@@ -158,21 +150,21 @@ class AutoMatchbyPartyNameDescription:
 		if len(result) == 1:
 			return (first_result[PARTY] if first_result[SCORE] > CUTOFF else None), True
 
+		if first_result[SCORE] <= CUTOFF:
+			return None, False
 		second_result = result[1]
-		if first_result[SCORE] > CUTOFF:
 			# If multiple matches with the same score, return None but discontinue matching
 			# Matches were found but were too close to distinguish between
-			if first_result[SCORE] == second_result[SCORE]:
-				return None, True
-
-			return first_result[PARTY], True
-		else:
-			return None, False
+		return (
+			(None, True)
+			if first_result[SCORE] == second_result[SCORE]
+			else (first_result[PARTY], True)
+		)
 
 
 def get_parties_in_order(deposit: float) -> list:
-	parties = ["Supplier", "Employee", "Customer"]  # most -> least likely to receive
-	if flt(deposit) > 0:
-		parties = ["Customer", "Supplier", "Employee"]  # most -> least likely to pay
-
-	return parties
+	return (
+		["Customer", "Supplier", "Employee"]
+		if flt(deposit) > 0
+		else ["Supplier", "Employee", "Customer"]
+	)

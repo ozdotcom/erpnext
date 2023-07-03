@@ -60,11 +60,11 @@ class TestSalesInvoice(unittest.TestCase):
 		return w
 
 	@classmethod
-	def setUpClass(self):
+	def setUpClass(cls):
 		unlink_payment_on_cancel_of_invoice()
 
 	@classmethod
-	def tearDownClass(self):
+	def tearDownClass(cls):
 		unlink_payment_on_cancel_of_invoice(0)
 
 	def test_timestamp_change(self):
@@ -447,8 +447,8 @@ class TestSalesInvoice(unittest.TestCase):
 
 		self.assertTrue(gl_entries)
 
-		expected_values = dict(
-			(d[0], d)
+		expected_values = {
+			d[0]: d
 			for d in [
 				[si.debit_to, 1500, 0.0],
 				[test_records[3]["items"][0]["income_account"], 0.0, 1163.45],
@@ -463,7 +463,7 @@ class TestSalesInvoice(unittest.TestCase):
 				["_Test Account Service Tax - _TC", 16.85, 0.0],
 				["Round Off - _TC", 0.01, 0.0],
 			]
-		)
+		}
 
 		for gle in gl_entries:
 			self.assertEqual(expected_values[gle.account][0], gle.account)
@@ -870,17 +870,17 @@ class TestSalesInvoice(unittest.TestCase):
 
 		self.assertTrue(gl_entries)
 
-		expected_values = dict(
-			(d[0], d)
+		expected_values = {
+			d[0]: d
 			for d in [
 				[si.debit_to, 630.0, 0.0],
 				[test_records[1]["items"][0]["income_account"], 0.0, 500.0],
 				[test_records[1]["taxes"][0]["account_head"], 0.0, 80.0],
 				[test_records[1]["taxes"][1]["account_head"], 0.0, 50.0],
 			]
-		)
+		}
 
-		for i, gle in enumerate(gl_entries):
+		for gle in gl_entries:
 			self.assertEqual(expected_values[gle.account][0], gle.account)
 			self.assertEqual(expected_values[gle.account][1], gle.debit)
 			self.assertEqual(expected_values[gle.account][2], gle.credit)
@@ -1246,10 +1246,11 @@ class TestSalesInvoice(unittest.TestCase):
 		)
 		self.assertTrue(gl_entries)
 
-		expected_values = dict(
-			(d[0], d) for d in [["Debtors - TCP1", 100.0, 0.0], ["Sales - TCP1", 0.0, 100.0]]
-		)
-		for i, gle in enumerate(gl_entries):
+		expected_values = {
+			d[0]: d
+			for d in [["Debtors - TCP1", 100.0, 0.0], ["Sales - TCP1", 0.0, 100.0]]
+		}
+		for gle in gl_entries:
 			self.assertEqual(expected_values[gle.account][0], gle.account)
 			self.assertEqual(expected_values[gle.account][1], gle.debit)
 			self.assertEqual(expected_values[gle.account][2], gle.credit)
@@ -1266,14 +1267,14 @@ class TestSalesInvoice(unittest.TestCase):
 		)
 		self.assertTrue(gl_entries)
 
-		expected_values = dict(
-			(d[0], d)
+		expected_values = {
+			d[0]: d
 			for d in [
 				[si.debit_to, 100.0, 0.0],
 				[test_records[1]["items"][0]["income_account"], 0.0, 100.0],
 			]
-		)
-		for i, gle in enumerate(gl_entries):
+		}
+		for gle in gl_entries:
 			self.assertEqual(expected_values[gle.account][0], gle.account)
 			self.assertEqual(expected_values[gle.account][1], gle.debit)
 			self.assertEqual(expected_values[gle.account][2], gle.credit)
@@ -1667,7 +1668,7 @@ class TestSalesInvoice(unittest.TestCase):
 			"credit",
 			"credit_in_account_currency",
 		):
-			for i, gle in enumerate(gl_entries):
+			for gle in gl_entries:
 				self.assertEqual(expected_values[gle.account][field], gle[field])
 
 		# cancel
@@ -1987,15 +1988,15 @@ class TestSalesInvoice(unittest.TestCase):
 		self.assertEqual(si.total_taxes_and_charges, 5446.88)
 		self.assertEqual(si.rounding_adjustment, 0.0)
 
-		expected_values = dict(
-			(d[0], d)
+		expected_values = {
+			d[0]: d
 			for d in [
 				[si.debit_to, 24900, 0.0],
 				["_Test Account Service Tax - _TC", 0.0, 5446.88],
 				["Sales - _TC", 0.0, 19453.12],
 				["Round Off - _TC", 0.01, 0.0],
 			]
-		)
+		}
 
 		gl_entries = frappe.db.sql(
 			"""select account, debit, credit
@@ -2043,15 +2044,15 @@ class TestSalesInvoice(unittest.TestCase):
 		self.assertEqual(si.total_taxes_and_charges, 228.82)
 		self.assertEqual(si.rounding_adjustment, -0.01)
 
-		expected_values = dict(
-			(d[0], d)
+		expected_values = {
+			d[0]: d
 			for d in [
 				[si.debit_to, 1500, 0.0],
 				["_Test Account Service Tax - _TC", 0.0, 114.41],
 				["_Test Account VAT - _TC", 0.0, 114.41],
 				["Sales - _TC", 0.0, 1271.18],
 			]
-		)
+		}
 
 		gl_entries = frappe.db.sql(
 			"""select account, debit, credit
@@ -2112,8 +2113,8 @@ class TestSalesInvoice(unittest.TestCase):
 		self.assertEqual(si.total_taxes_and_charges, 480.86)
 		self.assertEqual(si.rounding_adjustment, -0.02)
 
-		expected_values = dict(
-			(d[0], d)
+		expected_values = {
+			d[0]: d
 			for d in [
 				[si.debit_to, 4488.0, 0.0],
 				["_Test Account Service Tax - _TC", 0.0, 240.43],
@@ -2121,7 +2122,7 @@ class TestSalesInvoice(unittest.TestCase):
 				["Sales - _TC", 0.0, 4007.15],
 				["Round Off - _TC", 0.01, 0],
 			]
-		)
+		}
 
 		gl_entries = frappe.db.sql(
 			"""select account, debit, credit

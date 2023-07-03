@@ -24,14 +24,13 @@ class POSInvoiceMergeLog(Document):
 		for idx, inv in enumerate(self.pos_invoices, 1):
 			pos_occurences.setdefault(inv.pos_invoice, []).append(idx)
 
-		error_list = []
-		for key, value in pos_occurences.items():
-			if len(value) > 1:
-				error_list.append(
-					_("{} is added multiple times on rows: {}".format(frappe.bold(key), frappe.bold(value)))
-				)
-
-		if error_list:
+		if error_list := [
+			_(
+				f"{frappe.bold(key)} is added multiple times on rows: {frappe.bold(value)}"
+			)
+			for key, value in pos_occurences.items()
+			if len(value) > 1
+		]:
 			frappe.throw(error_list, title=_("Duplicate POS Invoices found"), as_list=True)
 
 	def validate_customer(self):
@@ -304,7 +303,7 @@ def get_all_unconsolidated_invoices():
 		"status": ["not in", ["Consolidated"]],
 		"docstatus": 1,
 	}
-	pos_invoices = frappe.db.get_all(
+	return frappe.db.get_all(
 		"POS Invoice",
 		filters=filters,
 		fields=[
@@ -316,8 +315,6 @@ def get_all_unconsolidated_invoices():
 			"return_against",
 		],
 	)
-
-	return pos_invoices
 
 
 def get_invoice_customer_map(pos_invoices):

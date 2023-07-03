@@ -112,7 +112,7 @@ class TestPaymentReconciliation(FrappeTestCase):
 		"""
 		Helper function to populate default values in sales invoice
 		"""
-		sinv = create_sales_invoice(
+		return create_sales_invoice(
 			qty=qty,
 			rate=rate,
 			company=self.company,
@@ -133,7 +133,6 @@ class TestPaymentReconciliation(FrappeTestCase):
 			do_not_save=do_not_save,
 			do_not_submit=do_not_submit,
 		)
-		return sinv
 
 	def create_payment_entry(self, amount=100, posting_date=nowdate(), customer=None):
 		"""
@@ -189,13 +188,13 @@ class TestPaymentReconciliation(FrappeTestCase):
 				{
 					"account": acc1,
 					"cost_center": cost_center,
-					"debit_in_account_currency": amount if amount > 0 else 0,
+					"debit_in_account_currency": max(amount, 0),
 					"credit_in_account_currency": abs(amount) if amount < 0 else 0,
 				},
 				{
 					"account": acc2,
 					"cost_center": cost_center,
-					"credit_in_account_currency": amount if amount > 0 else 0,
+					"credit_in_account_currency": max(amount, 0),
 					"debit_in_account_currency": abs(amount) if amount < 0 else 0,
 				},
 			],
@@ -208,8 +207,9 @@ class TestPaymentReconciliation(FrappeTestCase):
 
 		self.main_cc = frappe.get_doc("Cost Center", get_default_cost_center(self.company))
 
-		cc_exists = frappe.db.get_list("Cost Center", filters={"cost_center_name": cc_name})
-		if cc_exists:
+		if cc_exists := frappe.db.get_list(
+			"Cost Center", filters={"cost_center_name": cc_name}
+		):
 			self.sub_cc = frappe.get_doc("Cost Center", cc_exists[0].name)
 		else:
 			sub_cc = frappe.new_doc("Cost Center")
@@ -326,7 +326,7 @@ class TestPaymentReconciliation(FrappeTestCase):
 		rate = 100
 		invoices = []
 		payments = []
-		for i in range(5):
+		for _ in range(5):
 			invoices.append(self.create_sales_invoice(qty=1, rate=rate, posting_date=transaction_date))
 			pe = self.create_payment_entry(amount=rate, posting_date=transaction_date).save().submit()
 			payments.append(pe)
@@ -933,14 +933,13 @@ class TestPaymentReconciliation(FrappeTestCase):
 
 
 def make_customer(customer_name, currency=None):
-	if not frappe.db.exists("Customer", customer_name):
-		customer = frappe.new_doc("Customer")
-		customer.customer_name = customer_name
-		customer.type = "Individual"
-
-		if currency:
-			customer.default_currency = currency
-		customer.save()
-		return customer.name
-	else:
+	if frappe.db.exists("Customer", customer_name):
 		return customer_name
+	customer = frappe.new_doc("Customer")
+	customer.customer_name = customer_name
+	customer.type = "Individual"
+
+	if currency:
+		customer.default_currency = currency
+	customer.save()
+	return customer.name
