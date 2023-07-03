@@ -56,10 +56,7 @@ def get_fiscal_year(
 	fiscal_years = get_fiscal_years(
 		date, fiscal_year, label, verbose, company, as_dict=as_dict, boolean=boolean
 	)
-	if boolean:
-		return fiscal_years
-	else:
-		return fiscal_years[0]
+	return fiscal_years if boolean else fiscal_years[0]
 
 
 def get_fiscal_years(
@@ -193,7 +190,7 @@ def get_balance_on(
 
 	cond = ["is_cancelled=0"]
 	if date:
-		cond.append("posting_date <= %s" % frappe.db.escape(cstr(date)))
+		cond.append(f"posting_date <= {frappe.db.escape(cstr(date))}")
 	else:
 		# get balance of all entries that exist
 		date = nowdate()
@@ -213,11 +210,7 @@ def get_balance_on(
 			# hence, assuming balance as 0.0
 			return 0.0
 
-	if account:
-		report_type = acc.report_type
-	else:
-		report_type = ""
-
+	report_type = acc.report_type if account else ""
 	if cost_center and report_type == "Profit and Loss":
 		cc = frappe.get_doc("Cost Center", cost_center)
 		if cc.is_group:
@@ -284,7 +277,7 @@ def get_balance_on(
 def get_count_on(account, fieldname, date):
 	cond = ["is_cancelled=0"]
 	if date:
-		cond.append("posting_date <= %s" % frappe.db.escape(cstr(date)))
+		cond.append(f"posting_date <= {frappe.db.escape(cstr(date))}")
 	else:
 		# get balance of all entries that exist
 		date = nowdate()
@@ -310,7 +303,7 @@ def get_count_on(account, fieldname, date):
 		# for pl accounts, get balance within a fiscal year
 		if acc.report_type == "Profit and Loss":
 			cond.append(
-				"posting_date >= '%s' and voucher_type != 'Period Closing Voucher'" % year_start_date
+				f"posting_date >= '{year_start_date}' and voucher_type != 'Period Closing Voucher'"
 			)
 
 		# different filter for group and ledger - improved performance
@@ -692,13 +685,11 @@ def unlink_ref_doc_from_payment_entries(ref_doc):
 
 
 def remove_ref_doc_link_from_jv(ref_type, ref_no):
-	linked_jv = frappe.db.sql_list(
+	if linked_jv := frappe.db.sql_list(
 		"""select parent from `tabJournal Entry Account`
 		where reference_type=%s and reference_name=%s and docstatus < 2""",
 		(ref_type, ref_no),
-	)
-
-	if linked_jv:
+	):
 		frappe.db.sql(
 			"""update `tabJournal Entry Account`
 			set reference_type=null, reference_name = null,
@@ -712,13 +703,11 @@ def remove_ref_doc_link_from_jv(ref_type, ref_no):
 
 
 def remove_ref_doc_link_from_pe(ref_type, ref_no):
-	linked_pe = frappe.db.sql_list(
+	if linked_pe := frappe.db.sql_list(
 		"""select parent from `tabPayment Entry Reference`
 		where reference_doctype=%s and reference_name=%s and docstatus < 2""",
 		(ref_type, ref_no),
-	)
-
-	if linked_pe:
+	):
 		frappe.db.sql(
 			"""update `tabPayment Entry Reference`
 			set allocated_amount=0, modified=%s, modified_by=%s
@@ -853,7 +842,7 @@ def get_held_invoices(party_type, party):
 			"select name from `tabPurchase Invoice` where release_date IS NOT NULL and release_date > CURDATE()",
 			as_dict=1,
 		)
-		held_invoices = set(d["name"] for d in held_invoices)
+		held_invoices = {d["name"] for d in held_invoices}
 
 	return held_invoices
 
@@ -907,11 +896,17 @@ def get_outstanding_invoices(
 			if (
 				min_outstanding
 				and max_outstanding
-				and not (outstanding_amount >= min_outstanding and outstanding_amount <= max_outstanding)
+				and (
+					outstanding_amount < min_outstanding
+					or outstanding_amount > max_outstanding
+				)
 			):
 				continue
 
-			if not d.voucher_type == "Purchase Invoice" or d.voucher_no not in held_invoices:
+			if (
+				d.voucher_type != "Purchase Invoice"
+				or d.voucher_no not in held_invoices
+			):
 				outstanding_invoices.append(
 					frappe._dict(
 						{
@@ -928,10 +923,9 @@ def get_outstanding_invoices(
 					)
 				)
 
-	outstanding_invoices = sorted(
+	return sorted(
 		outstanding_invoices, key=lambda k: k["due_date"] or getdate(nowdate())
 	)
-	return outstanding_invoices
 
 
 def get_account_name(
@@ -963,9 +957,14 @@ def get_children(doctype, parent, company, is_root=False):
 
 	parent_fieldname = "parent_" + doctype.lower().replace(" ", "_")
 	fields = ["name as value", "is_group as expandable"]
-	filters = [["docstatus", "<", 2]]
-
-	filters.append(['ifnull(`{0}`,"")'.format(parent_fieldname), "=", "" if is_root else parent])
+	filters = [
+		["docstatus", "<", 2],
+		[
+			'ifnull(`{0}`,"")'.format(parent_fieldname),
+			"=",
+			"" if is_root else parent,
+		],
+	]
 
 	if is_root:
 		fields += ["root_type", "report_type", "account_currency"] if doctype == "Account" else []
@@ -973,7 +972,7 @@ def get_children(doctype, parent, company, is_root=False):
 
 	else:
 		fields += ["root_type", "account_currency"] if doctype == "Account" else []
-		fields += [parent_fieldname + " as parent"]
+		fields += [f"{parent_fieldname} as parent"]
 
 	acc = frappe.get_list(doctype, fields=fields, filters=filters)
 
@@ -1089,9 +1088,7 @@ def validate_field_number(doctype_name, docname, number_value, company, field_na
 		if company:
 			filters["company"] = company
 
-		doctype_with_same_number = frappe.db.get_value(doctype_name, filters)
-
-		if doctype_with_same_number:
+		if doctype_with_same_number := frappe.db.get_value(doctype_name, filters):
 			frappe.throw(
 				_("{0} Number {1} is already used in {2} {3}").format(
 					doctype_name, number_value, doctype_name.lower(), doctype_with_same_number
@@ -1172,10 +1169,9 @@ def repost_gle_for_stock_vouchers(
 		for voucher_type, voucher_no in stock_vouchers_chunk:
 			existing_gle = gle.get((voucher_type, voucher_no), [])
 			voucher_obj = frappe.get_doc(voucher_type, voucher_no)
-			# Some transactions post credit as negative debit, this is handled while posting GLE
-			# but while comparing we need to make sure it's flipped so comparisons are accurate
-			expected_gle = toggle_debit_credit_if_negative(voucher_obj.get_gl_entries(warehouse_account))
-			if expected_gle:
+			if expected_gle := toggle_debit_credit_if_negative(
+				voucher_obj.get_gl_entries(warehouse_account)
+			):
 				if not existing_gle or not compare_existing_and_expected_gle(
 					existing_gle, expected_gle, precision
 				):
@@ -1233,8 +1229,7 @@ def sort_stock_vouchers_by_posting_date(
 	).run(as_dict=True)
 	sorted_vouchers = [(sle.voucher_type, sle.voucher_no) for sle in sles]
 
-	unknown_vouchers = set(stock_vouchers) - set(sorted_vouchers)
-	if unknown_vouchers:
+	if unknown_vouchers := set(stock_vouchers) - set(sorted_vouchers):
 		sorted_vouchers.extend(unknown_vouchers)
 
 	return sorted_vouchers
@@ -1247,11 +1242,11 @@ def get_future_stock_vouchers(
 	values = []
 	condition = ""
 	if for_items:
-		condition += " and item_code in ({})".format(", ".join(["%s"] * len(for_items)))
+		condition += f' and item_code in ({", ".join(["%s"] * len(for_items))})'
 		values += for_items
 
 	if for_warehouses:
-		condition += " and warehouse in ({})".format(", ".join(["%s"] * len(for_warehouses)))
+		condition += f' and warehouse in ({", ".join(["%s"] * len(for_warehouses))})'
 		values += for_warehouses
 
 	if company:
@@ -1317,16 +1312,16 @@ def compare_existing_and_expected_gle(existing_gle, expected_gle, precision):
 		for e in existing_gle:
 			if entry.account == e.account:
 				account_existed = True
-			if (
-				entry.account == e.account
-				and (not entry.cost_center or not e.cost_center or entry.cost_center == e.cost_center)
-				and (
+				if (
+					not entry.cost_center
+					or not e.cost_center
+					or entry.cost_center == e.cost_center
+				) and (
 					flt(entry.debit, precision) != flt(e.debit, precision)
 					or flt(entry.credit, precision) != flt(e.credit, precision)
-				)
-			):
-				matched = False
-				break
+				):
+					matched = False
+					break
 		if not account_existed:
 			matched = False
 			break
@@ -1402,8 +1397,9 @@ def get_journal_entry(account, stock_adjustment_account, amount):
 
 def check_and_delete_linked_reports(report):
 	"""Check if reports are referenced in Desktop Icon"""
-	icons = frappe.get_all("Desktop Icon", fields=["name"], filters={"_report": report})
-	if icons:
+	if icons := frappe.get_all(
+		"Desktop Icon", fields=["name"], filters={"_report": report}
+	):
 		for icon in icons:
 			frappe.delete_doc("Desktop Icon", icon)
 
@@ -1415,7 +1411,7 @@ def get_payment_ledger_entries(gl_entries, cancel=0):
 
 		# companies
 		account = qb.DocType("Account")
-		companies = list(set([x.company for x in gl_entries]))
+		companies = list({x.company for x in gl_entries})
 
 		# receivable/payable account
 		accounts_with_types = (
@@ -1466,11 +1462,13 @@ def get_payment_ledger_entries(gl_entries, cancel=0):
 					against_voucher_type=gle.against_voucher_type
 					if gle.against_voucher_type
 					else gle.voucher_type,
-					against_voucher_no=gle.against_voucher if gle.against_voucher else gle.voucher_no,
+					against_voucher_no=gle.against_voucher
+					if gle.against_voucher
+					else gle.voucher_no,
 					account_currency=gle.account_currency,
 					amount=dr_or_cr,
 					amount_in_account_currency=dr_or_cr_account_currency,
-					delinked=True if cancel else False,
+					delinked=bool(cancel),
 					remarks=gle.remarks,
 				)
 
@@ -1605,15 +1603,18 @@ class QueryPaymentLedger(object):
 		filter_on_voucher_no = []
 		filter_on_against_voucher_no = []
 		if self.vouchers:
-			voucher_types = set([x.voucher_type for x in self.vouchers])
-			voucher_nos = set([x.voucher_no for x in self.vouchers])
+			voucher_types = {x.voucher_type for x in self.vouchers}
+			voucher_nos = {x.voucher_no for x in self.vouchers}
 
-			filter_on_voucher_no.append(ple.voucher_type.isin(voucher_types))
-			filter_on_voucher_no.append(ple.voucher_no.isin(voucher_nos))
-
-			filter_on_against_voucher_no.append(ple.against_voucher_type.isin(voucher_types))
-			filter_on_against_voucher_no.append(ple.against_voucher_no.isin(voucher_nos))
-
+			filter_on_voucher_no.extend(
+				(ple.voucher_type.isin(voucher_types), ple.voucher_no.isin(voucher_nos))
+			)
+			filter_on_against_voucher_no.extend(
+				(
+					ple.against_voucher_type.isin(voucher_types),
+					ple.against_voucher_no.isin(voucher_nos),
+				)
+			)
 		# build outstanding amount filter
 		filter_on_outstanding_amount = []
 		if self.min_outstanding:

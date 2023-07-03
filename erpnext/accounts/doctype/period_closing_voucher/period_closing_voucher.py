@@ -21,13 +21,10 @@ class PeriodClosingVoucher(AccountsController):
 
 	def on_submit(self):
 		self.db_set("gle_processing_status", "In Progress")
-		get_opening_entries = False
-
-		if not frappe.db.exists(
-			"Period Closing Voucher", {"company": self.company, "docstatus": 1, "name": ("!=", self.name)}
-		):
-			get_opening_entries = True
-
+		get_opening_entries = not frappe.db.exists(
+			"Period Closing Voucher",
+			{"company": self.company, "docstatus": 1, "name": ("!=", self.name)},
+		)
 		self.make_gl_entries(get_opening_entries=get_opening_entries)
 
 	def on_cancel(self):
@@ -143,24 +140,23 @@ class PeriodClosingVoucher(AccountsController):
 				process_gl_entries(gl_entries, closing_entries, voucher_name=self.name)
 
 	def get_grouped_gl_entries(self, get_opening_entries=False):
-		closing_entries = []
-		for acc in self.get_balances_based_on_dimensions(
-			group_by_account=True, for_aggregation=True, get_opening_entries=get_opening_entries
-		):
-			closing_entries.append(self.get_closing_entries(acc))
-
-		return closing_entries
+		return [
+			self.get_closing_entries(acc)
+			for acc in self.get_balances_based_on_dimensions(
+				group_by_account=True,
+				for_aggregation=True,
+				get_opening_entries=get_opening_entries,
+			)
+		]
 
 	def get_gl_entries(self):
-		gl_entries = []
-
-		# pl account
-		for acc in self.get_balances_based_on_dimensions(
-			group_by_account=True, report_type="Profit and Loss"
-		):
-			if flt(acc.bal_in_company_currency):
-				gl_entries.append(self.get_gle_for_pl_account(acc))
-
+		gl_entries = [
+			self.get_gle_for_pl_account(acc)
+			for acc in self.get_balances_based_on_dimensions(
+				group_by_account=True, report_type="Profit and Loss"
+			)
+			if flt(acc.bal_in_company_currency)
+		]
 		# closing liability account
 		for acc in self.get_balances_based_on_dimensions(
 			group_by_account=False, report_type="Profit and Loss"
@@ -256,9 +252,7 @@ class PeriodClosingVoucher(AccountsController):
 		qb_dimension_fields = ["cost_center", "finance_book", "project"]
 
 		self.accounting_dimensions = get_accounting_dimensions()
-		for dimension in self.accounting_dimensions:
-			qb_dimension_fields.append(dimension)
-
+		qb_dimension_fields.extend(iter(self.accounting_dimensions))
 		if group_by_account:
 			qb_dimension_fields.append("account")
 
@@ -268,7 +262,7 @@ class PeriodClosingVoucher(AccountsController):
 		}
 
 		if report_type:
-			account_filters.update({"report_type": report_type})
+			account_filters["report_type"] = report_type
 
 		accounts = frappe.get_all("Account", filters=account_filters, pluck="name")
 

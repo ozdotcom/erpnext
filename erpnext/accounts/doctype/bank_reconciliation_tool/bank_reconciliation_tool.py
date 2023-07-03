@@ -25,15 +25,16 @@ class BankReconciliationTool(Document):
 @frappe.whitelist()
 def get_bank_transactions(bank_account, from_date=None, to_date=None):
 	# returns bank transactions for a bank account
-	filters = []
-	filters.append(["bank_account", "=", bank_account])
-	filters.append(["docstatus", "=", 1])
-	filters.append(["unallocated_amount", ">", 0.0])
+	filters = [
+		["bank_account", "=", bank_account],
+		["docstatus", "=", 1],
+		["unallocated_amount", ">", 0.0],
+	]
 	if to_date:
 		filters.append(["date", "<=", to_date])
 	if from_date:
 		filters.append(["date", ">=", from_date])
-	transactions = frappe.get_all(
+	return frappe.get_all(
 		"Bank Transaction",
 		fields=[
 			"date",
@@ -52,7 +53,6 @@ def get_bank_transactions(bank_account, from_date=None, to_date=None):
 		filters=filters,
 		order_by="date",
 	)
-	return transactions
 
 
 @frappe.whitelist()
@@ -73,14 +73,12 @@ def get_account_balance(bank_account, till_date):
 
 	amounts_not_reflected_in_system = get_amounts_not_reflected_in_system(filters)
 
-	bank_bal = (
+	return (
 		flt(balance_as_per_system)
 		- flt(total_debit)
 		+ flt(total_credit)
 		+ amounts_not_reflected_in_system
 	)
-
-	return bank_bal
 
 
 @frappe.whitelist()
@@ -143,9 +141,7 @@ def create_journal_entry_bts(
 
 	company = frappe.get_value("Account", company_account, "company")
 
-	accounts = []
-	# Multi Currency?
-	accounts.append(
+	accounts = [
 		{
 			"account": second_account,
 			"credit_in_account_currency": bank_transaction.deposit,
@@ -154,8 +150,7 @@ def create_journal_entry_bts(
 			"party": party,
 			"cost_center": get_default_cost_center(company),
 		}
-	)
-
+	]
 	accounts.append(
 		{
 			"account": company_account,
@@ -286,6 +281,7 @@ def auto_reconcile_vouchers(
 	document_types = ["payment_entry", "journal_entry"]
 	bank_transactions = get_bank_transactions(bank_account)
 	matched_transaction = []
+	matched_trans = 0
 	for transaction in bank_transactions:
 		linked_payments = get_linked_payments(
 			transaction.name,
@@ -296,18 +292,16 @@ def auto_reconcile_vouchers(
 			from_reference_date,
 			to_reference_date,
 		)
-		vouchers = []
-		for r in linked_payments:
-			vouchers.append(
-				{
-					"payment_doctype": r[1],
-					"payment_name": r[2],
-					"amount": r[4],
-				}
-			)
+		vouchers = [
+			{
+				"payment_doctype": r[1],
+				"payment_name": r[2],
+				"amount": r[4],
+			}
+			for r in linked_payments
+		]
 		transaction = frappe.get_doc("Bank Transaction", transaction.name)
 		account = frappe.db.get_value("Bank Account", transaction.bank_account, "account")
-		matched_trans = 0
 		for voucher in vouchers:
 			gl_entry = frappe.db.get_value(
 				"GL Entry",
@@ -391,13 +385,9 @@ def subtract_allocations(gl_account, vouchers):
 	copied = []
 	for voucher in vouchers:
 		rows = get_total_allocated_amount(voucher[1], voucher[2])
-		amount = None
-		for row in rows:
-			if row["gl_account"] == gl_account:
-				amount = row["total"]
-				break
-
-		if amount:
+		if amount := next(
+			(row["total"] for row in rows if row["gl_account"] == gl_account), None
+		):
 			l = list(voucher)
 			l[3] -= amount
 			copied.append(tuple(l))
@@ -417,7 +407,7 @@ def check_matching(
 	from_reference_date,
 	to_reference_date,
 ):
-	exact_match = True if "exact_match" in document_types else False
+	exact_match = "exact_match" in document_types
 
 	filters = {
 		"amount": transaction.unallocated_amount,

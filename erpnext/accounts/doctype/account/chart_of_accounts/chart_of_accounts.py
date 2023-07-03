@@ -86,18 +86,18 @@ def add_suffix_if_duplicate(account_name, account_number, accounts):
 
 	if account_name_in_db in accounts:
 		count = accounts.count(account_name_in_db)
-		account_name = account_name + " " + cstr(count)
+		account_name = f"{account_name} {cstr(count)}"
 
 	return account_name, account_name_in_db
 
 
 def identify_is_group(child):
 	if child.get("is_group"):
-		is_group = child.get("is_group")
+		return child.get("is_group")
 	elif len(
-		set(child.keys())
-		- set(
-			[
+		(
+			set(child.keys())
+			- {
 				"account_name",
 				"account_type",
 				"root_type",
@@ -105,14 +105,12 @@ def identify_is_group(child):
 				"tax_rate",
 				"account_number",
 				"account_currency",
-			]
+			}
 		)
 	):
-		is_group = 1
+		return 1
 	else:
-		is_group = 0
-
-	return is_group
+		return 0
 
 
 def get_chart(chart_template, existing_company=None):
@@ -287,7 +285,7 @@ def build_tree_from_json(chart_template, chart_data=None, from_coa_importer=Fals
 				account_name = child["account_name"]
 
 			account["parent_account"] = parent
-			account["expandable"] = True if identify_is_group(child) else False
+			account["expandable"] = bool(identify_is_group(child))
 			account["value"] = (
 				(cstr(child.get("account_number")).strip() + " - " + account_name)
 				if child.get("account_number")

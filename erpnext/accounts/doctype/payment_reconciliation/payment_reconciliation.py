@@ -73,7 +73,7 @@ class PaymentReconciliation(Document):
 			}
 		)
 
-		payment_entries = get_advance_payment_entries(
+		return get_advance_payment_entries(
 			self.party_type,
 			self.party,
 			party_account,
@@ -82,8 +82,6 @@ class PaymentReconciliation(Document):
 			limit=self.payment_limit,
 			condition=condition,
 		)
-
-		return payment_entries
 
 	def get_jv_entries(self):
 		condition = self.get_conditions()
@@ -174,7 +172,9 @@ class PaymentReconciliation(Document):
 
 		self.get_return_invoices()
 		return_invoices = [
-			x for x in self.return_invoices if x.return_against == None or x.return_against == ""
+			x
+			for x in self.return_invoices
+			if x.return_against is None or x.return_against == ""
 		]
 
 		outstanding_dr_or_cr = []
@@ -189,19 +189,19 @@ class PaymentReconciliation(Document):
 				get_payments=True,
 			)
 
-			for inv in return_outstanding:
-				if inv.outstanding != 0:
-					outstanding_dr_or_cr.append(
-						frappe._dict(
-							{
-								"reference_type": inv.voucher_type,
-								"reference_name": inv.voucher_no,
-								"amount": -(inv.outstanding_in_account_currency),
-								"posting_date": inv.posting_date,
-								"currency": inv.currency,
-							}
-						)
-					)
+			outstanding_dr_or_cr.extend(
+				frappe._dict(
+					{
+						"reference_type": inv.voucher_type,
+						"reference_name": inv.voucher_no,
+						"amount": -(inv.outstanding_in_account_currency),
+						"posting_date": inv.posting_date,
+						"currency": inv.currency,
+					}
+				)
+				for inv in return_outstanding
+				if inv.outstanding != 0
+			)
 		return outstanding_dr_or_cr
 
 	def add_payment_entries(self, non_reconciled_payments):
@@ -276,10 +276,9 @@ class PaymentReconciliation(Document):
 	def calculate_difference_on_allocation_change(self, payment_entry, invoice, allocated_amount):
 		invoice_exchange_map = self.get_invoice_exchange_map(invoice, payment_entry)
 		invoice[0]["exchange_rate"] = invoice_exchange_map.get(invoice[0].get("invoice_number"))
-		new_difference_amount = self.get_difference_amount(
+		return self.get_difference_amount(
 			payment_entry[0], invoice[0], allocated_amount
 		)
-		return new_difference_amount
 
 	@frappe.whitelist()
 	def allocate_entries(self, args):
@@ -378,16 +377,14 @@ class PaymentReconciliation(Document):
 	@frappe.whitelist()
 	def reconcile(self):
 		if frappe.db.get_single_value("Accounts Settings", "auto_reconcile_payments"):
-			running_doc = is_any_doc_running(
+			if running_doc := is_any_doc_running(
 				dict(
 					company=self.company,
 					party_type=self.party_type,
 					party=self.party,
 					receivable_payable_account=self.receivable_payable_account,
 				)
-			)
-
-			if running_doc:
+			):
 				frappe.throw(
 					_("A Reconciliation Job {0} is running for the same filters. Cannot reconcile now").format(
 						get_link_to_form("Auto Reconcile", running_doc)
@@ -430,7 +427,7 @@ class PaymentReconciliation(Document):
 				"reference_type": row.against_voucher_type,
 				"reference_name": row.against_voucher,
 				dr_or_cr: flt(row.difference_amount),
-				dr_or_cr + "_in_account_currency": 0,
+				f"{dr_or_cr}_in_account_currency": 0,
 			}
 		)
 
@@ -442,7 +439,7 @@ class PaymentReconciliation(Document):
 				"account_currency": difference_account_currency,
 				"exchange_rate": 1,
 				"cost_center": erpnext.get_default_cost_center(self.company),
-				reverse_dr_or_cr + "_in_account_currency": flt(row.difference_amount),
+				f"{reverse_dr_or_cr}_in_account_currency": flt(row.difference_amount),
 				reverse_dr_or_cr: flt(row.difference_amount),
 			}
 		)

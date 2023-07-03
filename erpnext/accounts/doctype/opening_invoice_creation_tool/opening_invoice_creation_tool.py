@@ -206,24 +206,23 @@ class OpeningInvoiceCreationTool(Document):
 		invoices = self.get_invoices()
 		if len(invoices) < 50:
 			return start_import(invoices)
-		else:
-			from frappe.utils.scheduler import is_scheduler_inactive
+		from frappe.utils.scheduler import is_scheduler_inactive
 
-			if is_scheduler_inactive() and not frappe.flags.in_test:
-				frappe.throw(_("Scheduler is inactive. Cannot import data."), title=_("Scheduler Inactive"))
+		if is_scheduler_inactive() and not frappe.flags.in_test:
+			frappe.throw(_("Scheduler is inactive. Cannot import data."), title=_("Scheduler Inactive"))
 
-			job_id = f"opening_invoice::{self.name}"
+		job_id = f"opening_invoice::{self.name}"
 
-			if not is_job_enqueued(job_id):
-				enqueue(
-					start_import,
-					queue="default",
-					timeout=6000,
-					event="opening_invoice_creation",
-					job_id=job_id,
-					invoices=invoices,
-					now=frappe.conf.developer_mode or frappe.flags.in_test,
-				)
+		if not is_job_enqueued(job_id):
+			enqueue(
+				start_import,
+				queue="default",
+				timeout=6000,
+				event="opening_invoice_creation",
+				job_id=job_id,
+				invoices=invoices,
+				now=frappe.conf.developer_mode or frappe.flags.in_test,
+			)
 
 
 def start_import(invoices):

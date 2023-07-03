@@ -93,15 +93,17 @@ def generate_key(entry, accounting_dimensions):
 
 def get_previous_closing_entries(company, closing_date, accounting_dimensions):
 	entries = []
-	last_period_closing_voucher = frappe.db.get_all(
+	if last_period_closing_voucher := frappe.db.get_all(
 		"Period Closing Voucher",
-		filters={"docstatus": 1, "company": company, "posting_date": ("<", closing_date)},
+		filters={
+			"docstatus": 1,
+			"company": company,
+			"posting_date": ("<", closing_date),
+		},
 		fields=["name"],
 		order_by="posting_date desc",
 		limit=1,
-	)
-
-	if last_period_closing_voucher:
+	):
 		account_closing_balance = frappe.qb.DocType("Account Closing Balance")
 		query = frappe.qb.from_(account_closing_balance).select(
 			account_closing_balance.company,

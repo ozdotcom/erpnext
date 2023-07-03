@@ -13,7 +13,7 @@ test_dependencies = ["Supplier Group", "Customer Group"]
 
 class TestTaxWithholdingCategory(unittest.TestCase):
 	@classmethod
-	def setUpClass(self):
+	def setUpClass(cls):
 		# create relevant supplier, etc
 		create_records()
 		create_tax_withholding_category_records()
@@ -56,14 +56,12 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 			d.cancel()
 
 	def test_single_threshold_tds(self):
-		invoices = []
 		frappe.db.set_value(
 			"Supplier", "Test TDS Supplier1", "tax_withholding_category", "Single Threshold TDS"
 		)
 		pi = create_purchase_invoice(supplier="Test TDS Supplier1", rate=20000)
 		pi.submit()
-		invoices.append(pi)
-
+		invoices = [pi]
 		self.assertEqual(pi.taxes_and_charges_deducted, 2000)
 		self.assertEqual(pi.grand_total, 18000)
 
@@ -92,7 +90,6 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 			d.cancel()
 
 	def test_tax_withholding_category_checks(self):
-		invoices = []
 		frappe.db.set_value(
 			"Supplier", "Test TDS Supplier3", "tax_withholding_category", "New TDS Category"
 		)
@@ -102,8 +99,7 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		pi.apply_tds = 0
 		pi.save()
 		pi.submit()
-		invoices.append(pi)
-
+		invoices = [pi]
 		# Second Invoice will apply TDS checked
 		pi1 = create_purchase_invoice(supplier="Test TDS Supplier3", rate=20000)
 		pi1.submit()
@@ -135,7 +131,9 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		si.submit()
 
 		# assert tax collection on total invoice amount created until now
-		tcs_charged = sum([d.base_tax_amount for d in si.taxes if d.account_head == "TCS - _TC"])
+		tcs_charged = sum(
+			d.base_tax_amount for d in si.taxes if d.account_head == "TCS - _TC"
+		)
 		self.assertEqual(tcs_charged, 200)
 		self.assertEqual(si.grand_total, 12200)
 		invoices.append(si)
@@ -157,8 +155,6 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 			"Customer", "Test TCS Customer", "tax_withholding_category", "Cumulative Threshold TCS"
 		)
 
-		vouchers = []
-
 		# create advance payment
 		pe = create_payment_entry(
 			payment_type="Receive", party_type="Customer", party="Test TCS Customer", paid_amount=20000
@@ -166,8 +162,7 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		pe.paid_from = "Debtors - _TC"
 		pe.paid_to = "Cash - _TC"
 		pe.submit()
-		vouchers.append(pe)
-
+		vouchers = [pe]
 		# create invoice
 		si1 = create_sales_invoice(customer="Test TCS Customer", rate=5000)
 		si1.submit()
@@ -197,8 +192,12 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		vouchers.append(si3)
 
 		# assert tax collection on total invoice amount created until now
-		tcs_charged = sum([d.base_tax_amount for d in si2.taxes if d.account_head == "TCS - _TC"])
-		tcs_charged += sum([d.base_tax_amount for d in si3.taxes if d.account_head == "TCS - _TC"])
+		tcs_charged = sum(
+			d.base_tax_amount for d in si2.taxes if d.account_head == "TCS - _TC"
+		)
+		tcs_charged += sum(
+			d.base_tax_amount for d in si3.taxes if d.account_head == "TCS - _TC"
+		)
 		self.assertEqual(tcs_charged, 1500)
 
 		# cancel invoice and payments to avoid clashing
@@ -210,8 +209,6 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		frappe.db.set_value(
 			"Supplier", "Test TDS Supplier4", "tax_withholding_category", "Cumulative Threshold TDS"
 		)
-		invoices = []
-
 		pi = create_purchase_invoice(supplier="Test TDS Supplier4", rate=20000, do_not_save=True)
 		pi.append(
 			"taxes",
@@ -227,8 +224,7 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		)
 		pi.save()
 		pi.submit()
-		invoices.append(pi)
-
+		invoices = [pi]
 		# Second Invoice will apply TDS checked
 		pi1 = create_purchase_invoice(supplier="Test TDS Supplier4", rate=20000)
 		pi1.submit()
@@ -244,8 +240,6 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		frappe.db.set_value(
 			"Supplier", "Test TDS Supplier4", "tax_withholding_category", "Cumulative Threshold TDS"
 		)
-		invoices = []
-
 		pi = create_purchase_invoice(supplier="Test TDS Supplier4", rate=20000, do_not_save=True)
 		pi.extend(
 			"items",
@@ -272,15 +266,12 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		)
 		pi.save()
 		pi.submit()
-		invoices.append(pi)
-
+		invoices = [pi]
 		self.assertEqual(pi.taxes[0].tax_amount, 5500)
 
 		# cancel invoices to avoid clashing
 		for d in reversed(invoices):
 			d.cancel()
-
-		orders = []
 
 		po = create_purchase_order(supplier="Test TDS Supplier4", rate=20000, do_not_save=True)
 		po.extend(
@@ -308,8 +299,7 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		)
 		po.save()
 		po.submit()
-		orders.append(po)
-
+		orders = [po]
 		self.assertEqual(po.taxes[0].tax_amount, 5500)
 
 		# cancel orders to avoid clashing
@@ -320,14 +310,11 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		frappe.db.set_value(
 			"Supplier", "Test TDS Supplier5", "tax_withholding_category", "Test Service Category"
 		)
-		invoices = []
-
 		pi = create_purchase_invoice(supplier="Test TDS Supplier5", rate=500, do_not_save=True)
 		pi.tax_withholding_category = "Test Service Category"
 		pi.save()
 		pi.submit()
-		invoices.append(pi)
-
+		invoices = [pi]
 		# Second Invoice will apply TDS checked
 		pi1 = create_purchase_invoice(supplier="Test TDS Supplier5", rate=2500, do_not_save=True)
 		pi1.tax_withholding_category = "Test Goods Category"
@@ -345,15 +332,12 @@ class TestTaxWithholdingCategory(unittest.TestCase):
 		frappe.db.set_value(
 			"Supplier", "Test TDS Supplier6", "tax_withholding_category", "Test Multi Invoice Category"
 		)
-		invoices = []
-
 		pi = create_purchase_invoice(supplier="Test TDS Supplier6", rate=4000, do_not_save=True)
 		pi.apply_tds = 1
 		pi.tax_withholding_category = "Test Multi Invoice Category"
 		pi.save()
 		pi.submit()
-		invoices.append(pi)
-
+		invoices = [pi]
 		pi1 = create_purchase_invoice(supplier="Test TDS Supplier6", rate=2000, do_not_save=True)
 		pi1.apply_tds = 1
 		pi1.is_return = 1

@@ -54,7 +54,7 @@ class BankClearance(Document):
 				d.account_currency = default_currency
 
 			formatted_amount = fmt_money(abs(amount), 2, d.account_currency)
-			d.amount = formatted_amount + " " + (_("Dr") if amount > 0 else _("Cr"))
+			d.amount = f"{formatted_amount} " + (_("Dr") if amount > 0 else _("Cr"))
 			d.posting_date = getdate(d.posting_date)
 
 			d.pop("credit")
@@ -191,11 +191,9 @@ def get_payment_entries_for_bank_clearance(
 			as_dict=1,
 		)
 
-	entries = (
+	return (
 		list(payment_entries)
 		+ list(journal_entries)
 		+ list(pos_sales_invoices)
 		+ list(pos_purchase_invoices)
 	)
-
-	return entries
